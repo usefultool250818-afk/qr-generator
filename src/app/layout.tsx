@@ -13,8 +13,35 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QRコード生成",
-  description: "文字やURLから即時にQRコードを作成。SVG表示とPNGダウンロードに対応。",
+  metadataBase: new URL("https://qr-generator-bice-nu.vercel.app"),
+  title: {
+    default: "QRコード生成 | 便利ツール",
+    template: "%s | 便利ツール",
+  },
+  description:
+    "文字やURLから即時にQRコードを作成。SVG表示とPNGダウンロードに対応。処理はブラウザ内で完結します。",
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: "QRコード生成 | 便利ツール",
+    description:
+      "文字やURLから即時にQRコードを作成。SVG表示とPNGダウンロードに対応。処理はブラウザ内で完結します。",
+    siteName: "便利ツール",
+  },
+  twitter: {
+    card: "summary",
+    title: "QRコード生成 | 便利ツール",
+    description:
+      "文字やURLから即時にQRコードを作成。SVG表示とPNGダウンロードに対応。",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
+  robots: { index: true, follow: true },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" }, // slate-900
+  ],
 };
 
 export default function RootLayout({
@@ -23,9 +50,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ja" className="h-full scroll-smooth" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={[
+          geistSans.variable,
+          geistMono.variable,
+          "antialiased min-h-dvh",
+          // 背景と文字色（ライト/ダーク）
+          "bg-gradient-to-b from-white to-slate-50 text-slate-900",
+          "dark:from-slate-950 dark:to-slate-900 dark:text-slate-100",
+        ].join(" ")}
       >
         {children}
       </body>
