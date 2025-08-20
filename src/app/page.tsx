@@ -1,103 +1,218 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import QRCode from "react-qr-code";
 import QR from "qrcode";
 
-export default function Home() {
-  const [text, setText] = useState("");
-  const [pngUrl, setPngUrl] = useState<string | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+type Level = "L" | "M" | "Q" | "H";
 
-  // 入力が変わるたびにPNGデータURLを生成（SVG表示はリアルタイム、PNGはダウンロード用）
+export default function Page() {
+  // 入力と設定
+  const [text, setText] = useState("");
+  const [size, setSize] = useState<number>(256);
+  const [level, setLevel] = useState<Level>("M");
+  const [fg, setFg] = useState("#111827"); // slate-900
+  const [bg, setBg] = useState("#ffffff");
+
+  // プレビュー用
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // 変更のたびにプレビュー更新
   useEffect(() => {
-    if (!text) {
-      setPngUrl(null);
-      return;
-    }
-    QR.toDataURL(text, { width: 512, margin: 1 })
-      .then(setPngUrl)
-      .catch(() => setPngUrl(null));
-  }, [text]);
+    if (!canvasRef.current) return;
+    const draw = async () => {
+      try {
+        setError(null);
+        if (!text) {
+          const ctx = canvasRef.current!.getContext("2d");
+          if (ctx) {
+            ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
+          }
+          return;
+        }
+        await QR.toCanvas(canvasRef.current!, text, {
+          width: size,
+          errorCorrectionLevel: level,
+          color: {
+            dark: fg,
+            light: bg,
+          },
+          margin: 2, // Quiet Zone
+        });
+      } catch (e) {
+        setError("QRコードの生成に失敗しました。入力内容をご確認ください。");
+      }
+    };
+    draw();
+  }, [text, size, level, fg, bg]);
+
+  const handleCopyPng = async () => {
+    if (!canvasRef.current) return;
+    return new Promise<void>((resolve) => {
+      canvasRef.current!.toBlob(async (blob) => {
+        if (!blob) return resolve();
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        } catch {
+          // フォールバックなし（古いブラウザでは失敗する可能性）
+        }
+        resolve();
+      });
+    });
+  };
+
+  const handleDownloadPng = () => {
+    if (!canvasRef.current) return;
+    const link = document.createElement("a");
+    link.download = "qrcode.png";
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
+  };
 
   return (
-    <main style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>QRコード生成</h1>
-      <p style={{ color: "#444", marginBottom: 16 }}>
-        文字やURLを入力すると、QRコードを即時に生成します（SVG表示／PNG保存に対応）。
-      </p>
+    <main className="mx-auto max-w-6xl px-4 py-10 md:py-14">
+      {/* Hero */}
+      <section className="text-center space-y-4">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">QRコード生成</h1>
+        <p className="text-slate-600 dark:text-slate-300">
+          テキストやURLを入力すると即時にQRを作成。<span className="font-medium">PNGコピー</span>／
+          <span className="font-medium">PNGダウンロード</span>に対応。データは<strong>ブラウザ内処理</strong>です。
+        </p>
+      </section>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={5}
-        placeholder="https://example.com や 任意の文字列を入力"
-        style={{
-          width: "100%",
-          fontSize: 16,
-          padding: 12,
-          border: "2px solid #333",
-          borderRadius: 8,
-          boxSizing: "border-box",
-        }}
-      />
+      {/* Builder */}
+      <section className="mt-8 grid gap-6 md:gap-8 md:grid-cols-2">
+        {/* 入力フォーム */}
+        <div className="rounded-2xl border bg-white/70 backdrop-blur p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="space-y-5">
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">テキスト / URL</span>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={5}
+                placeholder="https://example.com など"
+                aria-label="QRに変換するテキストまたはURL"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400
+                           focus:outline-none focus:ring-4 focus:ring-indigo-100
+                           dark:bg-slate-950 dark:border-slate-800"
+              />
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>{text.length} 文字</span>
+                <span aria-live="polite">{error ? "エラーがあります" : "\u00A0"}</span>
+              </div>
+            </label>
 
-      <div style={{ marginTop: 24, display: "grid", gap: 16 }}>
-        <div
-          style={{
-            background: "white",
-            padding: 16,
-            borderRadius: 12,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            display: "inline-block",
-            width: "fit-content",
-          }}
-        >
-          {text ? (
-            <QRCode value={text} size={192} />
-          ) : (
-            <div style={{ color: "#777" }}>入力するとQRコードを表示します</div>
-          )}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="text-sm font-medium">サイズ（px）</span>
+                <input
+                  type="number"
+                  min={128}
+                  max={1024}
+                  value={size}
+                  onChange={(e) => setSize(Math.min(1024, Math.max(128, Number(e.target.value) || 256)))}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm
+                             focus:outline-none focus:ring-4 focus:ring-indigo-100
+                             dark:bg-slate-950 dark:border-slate-800"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">誤り訂正</span>
+                <select
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value as Level)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm
+                             focus:outline-none focus:ring-4 focus:ring-indigo-100
+                             dark:bg-slate-950 dark:border-slate-800"
+                >
+                  <option value="L">L（~7%）</option>
+                  <option value="M">M（~15%）</option>
+                  <option value="Q">Q（~25%）</option>
+                  <option value="H">H（~30%）</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="text-sm font-medium">前景色</span>
+                <input
+                  type="color"
+                  value={fg}
+                  onChange={(e) => setFg(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm
+                             dark:bg-slate-950 dark:border-slate-800"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium">背景色</span>
+                <input
+                  type="color"
+                  value={bg}
+                  onChange={(e) => setBg(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm
+                             dark:bg-slate-950 dark:border-slate-800"
+                />
+              </label>
+            </div>
+
+            {error && (
+              <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+                {error}
+              </p>
+            )}
+
+            <p className="text-xs text-slate-500">
+              個人情報や機密情報の入力はお控えください。生成は端末内で完結します（送信なし）。
+            </p>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button
-            ref={btnRef}
-            onClick={() => {
-              navigator.clipboard.writeText(text || "").catch(() => {});
-            }}
-            disabled={!text}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              border: "1px solid #ccc",
-              background: text ? "#f8f8f8" : "#eee",
-              cursor: text ? "pointer" : "not-allowed",
-            }}
-          >
-            入力テキストをコピー
-          </button>
+        {/* プレビュー */}
+        <div className="rounded-2xl border bg-white/70 backdrop-blur p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col gap-4">
+            <div className="aspect-square w-full rounded-xl border bg-white p-4 dark:border-slate-800 dark:bg-slate-950 grid place-items-center">
+              {text ? (
+                <canvas
+                  ref={canvasRef}
+                  width={size}
+                  height={size}
+                  className="h-auto w-full max-w-[min(90%,560px)]"
+                  aria-label="QRコード プレビュー"
+                />
+              ) : (
+                <p className="text-slate-500 text-sm">入力するとここにQRコードが表示されます</p>
+              )}
+            </div>
 
-          <a
-            href={pngUrl ?? undefined}
-            download="qrcode.png"
-            style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              border: "1px solid #ccc",
-              background: pngUrl ? "#f8f8f8" : "#eee",
-              color: "inherit",
-              textDecoration: "none",
-              pointerEvents: pngUrl ? "auto" : "none",
-            }}
-          >
-            PNGをダウンロード
-          </a>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleCopyPng}
+                disabled={!text}
+                className="inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium shadow-sm
+                           bg-indigo-600 text-white hover:bg-indigo-500 active:translate-y-[1px]
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                PNGをコピー
+              </button>
+              <button
+                onClick={handleDownloadPng}
+                disabled={!text}
+                className="inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium shadow-sm
+                           bg-white text-slate-900 hover:bg-slate-50 active:translate-y-[1px]
+                           dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900
+                           border-slate-300 dark:border-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                PNGをダウンロード
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <p style={{ marginTop: 24, fontSize: 12, color: "#666" }}>
-        ※ データはサーバーに送信されません。ブラウザ内で生成しています。
+      <p className="mt-8 text-center text-xs text-slate-500">
+        ※ サーバー送信なし／ブラウザ内生成
       </p>
     </main>
   );
