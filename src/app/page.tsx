@@ -20,18 +20,20 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"png" | "svg" | null>(null);
 
-  // Canvas生成
+  // Canvas生成（★ null安全に修正）
   useEffect(() => {
-    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const draw = async () => {
       try {
         setError(null);
-        const ctx = canvasRef.current.getContext("2d");
+        const ctx = canvas.getContext("2d");
         if (!text) {
-          if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
           return;
         }
-        await QR.toCanvas(canvasRef.current, text, {
+        await QR.toCanvas(canvas, text, {
           width: size,
           errorCorrectionLevel: level,
           color: { dark: fg, light: bg },
@@ -69,9 +71,11 @@ export default function Page() {
 
   // PNG コピー
   const handleCopyPng = async () => {
-    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
     await new Promise<void>((resolve) => {
-      canvasRef.current!.toBlob(async (blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob) return resolve();
         try {
           await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
@@ -88,10 +92,11 @@ export default function Page() {
 
   // PNG ダウンロード
   const handleDownloadPng = () => {
-    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const link = document.createElement("a");
     link.download = "qrcode.png";
-    link.href = canvasRef.current.toDataURL("image/png");
+    link.href = canvas.toDataURL("image/png");
     link.click();
   };
 
@@ -246,7 +251,9 @@ export default function Page() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-slate-500">復旧率が高いほど汚れや欠損に強い反面、情報量が増えます。</p>
+              <p className="text-xs text-slate-500">
+                復旧率が高いほど汚れや欠損に強い反面、情報量が増えます。
+              </p>
             </fieldset>
 
             {/* マージン（Quiet Zone） */}
