@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import QR from "qrcode";
+import QR, { QRCodeToStringOptions } from "qrcode";
 
 type Level = "L" | "M" | "Q" | "H";
 
@@ -14,7 +14,7 @@ export default function Page() {
   const [bg, setBg] = useState("#ffffff");
   const [margin, setMargin] = useState<number>(2);
 
-  // プレビュー（Canvas / SVG）
+  // プレビュー
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [svgString, setSvgString] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -28,9 +28,7 @@ export default function Page() {
         setError(null);
         const ctx = canvasRef.current.getContext("2d");
         if (!text) {
-          if (ctx) {
-            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          }
+          if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           return;
         }
         await QR.toCanvas(canvasRef.current, text, {
@@ -39,14 +37,14 @@ export default function Page() {
           color: { dark: fg, light: bg },
           margin,
         });
-      } catch (e) {
+      } catch {
         setError("QRコードの生成に失敗しました。入力内容をご確認ください。");
       }
     };
-    draw();
+    void draw();
   }, [text, size, level, fg, bg, margin]);
 
-  // SVG生成
+  // SVG生成（ダウンロード/コピー用）
   useEffect(() => {
     const makeSvg = async () => {
       if (!text) {
@@ -54,20 +52,20 @@ export default function Page() {
         return;
       }
       try {
-        const svg = await QR.toString(text, {
+        const opts: QRCodeToStringOptions = {
           type: "svg",
           errorCorrectionLevel: level,
           color: { dark: fg, light: bg },
           margin,
-          width: size, // qrcodeはsvgでもwidth指定可
-        } as any);
+        };
+        const svg = await QR.toString(text, opts);
         setSvgString(svg);
       } catch {
         setSvgString("");
       }
     };
-    makeSvg();
-  }, [text, level, fg, bg, margin, size]);
+    void makeSvg();
+  }, [text, level, fg, bg, margin]);
 
   // PNG コピー
   const handleCopyPng = async () => {
@@ -97,16 +95,15 @@ export default function Page() {
     link.click();
   };
 
-  // SVG コピー
+  // SVG コピー（テキストとして）
   const handleCopySvg = async () => {
     if (!svgString) return;
     try {
-      // 文字列コピー（SVGはテキストで扱える）
       await navigator.clipboard.writeText(svgString);
       setCopied("svg");
       setTimeout(() => setCopied(null), 1200);
     } catch {
-      // noop
+      /* noop */
     }
   };
 
@@ -122,19 +119,19 @@ export default function Page() {
     URL.revokeObjectURL(url);
   };
 
-  // ショートカット：Ctrl/Cmd + Enter でPNGコピー
+  // ショートカット：Ctrl/Cmd + Enter で PNG コピー
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        if (text) handleCopyPng();
+        if (text) void handleCopyPng();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [text]);
 
-  // 誤り訂正の説明メモ
+  // 誤り訂正レベルのラベル
   const ecLabels: Record<Level, string> = useMemo(
     () => ({
       L: "L（~7%復旧）",
@@ -151,9 +148,9 @@ export default function Page() {
       <section className="text-center space-y-4">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">QRコード生成</h1>
         <p className="text-slate-600 dark:text-slate-300">
-          テキストやURLを入力すると即時にQRを作成。{" "}
-          <span className="font-medium">PNG/SVGのコピー・ダウンロード</span> に対応。生成は
-          <strong>ブラウザ内処理</strong>です。
+          テキストやURLを入力すると即時にQRを作成。
+          <span className="font-medium"> PNG/SVGのコピー・ダウンロード</span> に対応。
+          生成は<strong>ブラウザ内処理</strong>です。
         </p>
       </section>
 
@@ -210,6 +207,7 @@ export default function Page() {
                     value={size}
                     onChange={(e) => setSize(Number(e.target.value))}
                     className="w-full"
+                    aria-label="サイズ（スライダー）"
                   />
                   <input
                     type="number"
@@ -222,6 +220,7 @@ export default function Page() {
                     className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm
                                focus:outline-none focus:ring-4 focus:ring-indigo-100
                                dark:bg-slate-950 dark:border-slate-800"
+                    aria-label="サイズ（数値入力）"
                   />
                 </div>
               </label>
@@ -261,19 +260,18 @@ export default function Page() {
                   value={margin}
                   onChange={(e) => setMargin(Number(e.target.value))}
                   className="w-full"
+                  aria-label="マージン（スライダー）"
                 />
                 <input
                   type="number"
                   min={0}
                   max={8}
                   value={margin}
-                  onChange={(e) => {
-                    const v = Math.min(8, Math.max(0, Number(e.target.value) || 0));
-                    setMargin(v);
-                  }}
+                  onChange={(e) => setMargin(Math.min(8, Math.max(0, Number(e.target.value) || 0)))}
                   className="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm
                              focus:outline-none focus:ring-4 focus:ring-indigo-100
                              dark:bg-slate-950 dark:border-slate-800"
+                  aria-label="マージン（数値入力）"
                 />
               </div>
             </label>
@@ -288,6 +286,7 @@ export default function Page() {
                   onChange={(e) => setFg(e.target.value)}
                   className="h-10 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm
                              dark:bg-slate-950 dark:border-slate-800"
+                  aria-label="前景色"
                 />
               </label>
               <label className="space-y-1">
@@ -298,6 +297,7 @@ export default function Page() {
                   onChange={(e) => setBg(e.target.value)}
                   className="h-10 w-full rounded-xl border border-slate-300 bg-white p-1 shadow-sm
                              dark:bg-slate-950 dark:border-slate-800"
+                  aria-label="背景色"
                 />
               </label>
             </div>
@@ -377,7 +377,7 @@ export default function Page() {
             </div>
 
             <div className="text-xs text-slate-500">
-              <p>ヒント：高解像度が必要なら SVG で保存すると綺麗です。</p>
+              <p>ヒント：高解像度が必要なら SVG 保存が便利です（劣化しません）。</p>
               <p>ショートカット：Ctrl/Cmd + Enter で PNG をコピー</p>
             </div>
           </div>
